@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	errch := make(chan error, 2)
+	errch := make(chan error, len(os.Args)-1)
 	for _, arg := range os.Args[1:] {
 		conn, err := net.Dial("tcp", strings.Split(arg, "=")[1])
 		if err != nil {
