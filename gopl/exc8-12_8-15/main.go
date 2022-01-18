@@ -13,6 +13,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"time"
 )
 
 //!+broadcaster
@@ -25,6 +26,8 @@ var (
 	entering = make(chan client)
 	leaving  = make(chan client)
 	messages = make(chan string) // all incoming client messages
+
+	iddleLimit = 15 * time.Second
 )
 
 func broadcaster() {
@@ -60,6 +63,9 @@ func handleConn(conn net.Conn) {
 	ch := make(chan string) // outgoing client messages
 	go clientWriter(conn, ch)
 
+	msgSent := make(chan struct{})
+	go disconnectIddle(conn, ch, msgSent)
+
 	input := bufio.NewScanner(conn)
 	fmt.Fprint(conn, "insert your name: ")
 	var name string
@@ -79,6 +85,7 @@ func handleConn(conn net.Conn) {
 
 	for input.Scan() {
 		messages <- name + ": " + input.Text()
+		msgSent <- struct{}{}
 	}
 	// NOTE: ignoring potential errors from input.Err()
 
@@ -94,6 +101,17 @@ func clientWriter(conn net.Conn, ch <-chan string) {
 }
 
 //!-handleConn
+
+func disconnectIddle(conn net.Conn, clich chan<- string, msgSentCh <-chan struct{}) {
+	for {
+		select {
+		case <-msgSentCh:
+			continue
+		case <-time.After(iddleLimit):
+			conn.Close()
+		}
+	}
+}
 
 //!+main
 func main() {
